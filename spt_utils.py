@@ -2,6 +2,7 @@
 import os
 import webbrowser
 from configparser import ConfigParser
+from dataclasses import dataclass
 
 import requests
 from ahk import AHK, Hotkey
@@ -98,9 +99,17 @@ class Hotkeys:
             self.hide_hotkey.start()
 
 
+@dataclass
+class Mod:
+    name: str
+    author: str
+    version: str
+
+
 class ModManager:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, mods: list[Mod]):
         cfg.read_config()
+        self.enabled_mods: list[Mod] = mods
 
     def parse_urls(self, url):
         resp = requests.get(url)

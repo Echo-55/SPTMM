@@ -18,10 +18,10 @@ from ahk import AHK
 from ahk.directives import NoTrayIcon
 
 # from PIL import Image
-from tkinterdnd2 import TkinterDnD
+from tkinterdnd2 import DND_FILES, TkinterDnD
 from win32api import GetSystemMetrics
 
-from spt_utils import Config, Hotkeys, ModManager, Utils
+from spt_utils import Config, Hotkeys, Mod, ModManager, Utils
 
 ahk = AHK(directives=[NoTrayIcon])
 
@@ -515,7 +515,8 @@ class UI(TkinterDnD.Tk):
         self.tab_view.set(tab)
 
     def get_mods_info(self):
-        data = []
+        table_data = []
+        mods = []
 
         # Iterate over the mod_folders list
         for folder in cfg.mods_folders:
@@ -533,13 +534,16 @@ class UI(TkinterDnD.Tk):
                 author = package_json.get("author")
                 version = package_json.get("version")
 
-                # Add the data to the list
-                data.append({"name": name, "author": author, "version": version})
+                mod = Mod(name, author, version)
+                mods.append(mod)
 
-        sorted_data = sorted(data, key=lambda d: d["name"].lower())
+                # Add the data to the list
+                table_data.append({"name": name, "author": author, "version": version})
+
+        sorted_table_data = sorted(table_data, key=lambda d: d["name"].lower())
         # Create a Pandas DataFrame from the data list
-        df = pd.DataFrame(sorted_data)
-        return df
+        df = pd.DataFrame(sorted_table_data)
+        return df, mods
 
     def build_mods_table(self):
         # resize the window to make room for the table
@@ -578,7 +582,7 @@ class UI(TkinterDnD.Tk):
         self.mods_table.heading("Version", text="Version")
 
         # Iterate through the rows in the dataframe
-        df = self.get_mods_info()
+        df = self.get_mods_info()[0]
         for index, row in df.iterrows():
             # Insert the data into the treeview widget
             self.mods_table.insert(
@@ -649,9 +653,12 @@ def main():
     cfg = Config()
     hotkeys = Hotkeys(cfg)
     utils = Utils(cfg)
-    sptmm = ModManager(cfg)
 
     window = UI()
+
+    mods = window.get_mods_info()[1]
+    sptmm = ModManager(cfg, mods)
+
     window.after(1000, hotkeys.start, window)
     # window.after(2000, window.create_tools_frame)
     # window.after(5000, quit)
