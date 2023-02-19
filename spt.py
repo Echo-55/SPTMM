@@ -16,12 +16,12 @@ import pandas as pd
 import py7zr
 from ahk import AHK
 from ahk.directives import NoTrayIcon
-from PIL import Image
-from tkinterdnd2 import *
+
+# from PIL import Image
+from tkinterdnd2 import TkinterDnD
 from win32api import GetSystemMetrics
 
-from spt_utils import Config, Hotkeys, Utils
-from sptmm import ModManager
+from spt_utils import Config, Hotkeys, ModManager, Utils
 
 ahk = AHK(directives=[NoTrayIcon])
 
@@ -113,11 +113,11 @@ class UI(TkinterDnD.Tk):
 
         if self.auto_start_launcher:
             self.auto_start_var = tk.StringVar(
-                self, value=1, name="self.auto_start_var"
+                self, value="1", name="self.auto_start_var"
             )
         else:
             self.auto_start_var = tk.StringVar(
-                self, value=0, name="self.auto_start_var"
+                self, value="0", name="self.auto_start_var"
             )
 
         self.auto_start_launcher_checkbox = ctk.CTkCheckBox(
@@ -136,7 +136,7 @@ class UI(TkinterDnD.Tk):
         self.auto_start_launcher_checkbox.grid(padx=5, pady=5, row=3, column=0)
 
         if self.auto_start_launcher:
-            self.auto_start_launcher_checkbox.select(1)
+            self.auto_start_launcher_checkbox.select(True)
 
         # @ Mods tab
         # @ Open dir and mod table inside options_frame
@@ -174,7 +174,7 @@ class UI(TkinterDnD.Tk):
         self.open_hub_button = ctk.CTkButton(
             self.mods_tab_frame,
             text="Open SPT Hub",
-            command=lambda: webbrowser.open_new_tab("https://hub.sp-tarkov.com/files/"),
+            command=lambda: webbrowser.open_new_tab("https://hub.sp-tarkov.com/files/"),  # type: ignore
             font=("Fira Code", 12),
         )
         self.open_hub_button.grid(padx=5, pady=5, row=1, column=3)
@@ -188,22 +188,21 @@ class UI(TkinterDnD.Tk):
         )
         self.auto_start_label.grid(padx=5, pady=5, column=0, row=0)
 
-        wait_time = tk.StringVar(
+        self.wait_time = tk.StringVar(
             self, value=cfg.get(cfg.selected_version, "launcher_wait_time")
         )
         self.auto_start_entry = ctk.CTkEntry(
             self.settings_tab_frame,
             width=30,
             height=20,
-            textvariable=wait_time,
+            textvariable=self.wait_time,
         )
-        cfg.wait_time = wait_time.get()
         self.auto_start_entry.grid(padx=3, pady=3, column=1, row=0)
 
         self.save_button = ctk.CTkButton(
             self.settings_tab_frame,
             text="Save",
-            command=lambda: self.save_button_cb(wait_time=wait_time.get()),
+            command=lambda: self.save_button_cb(wait_time=self.wait_time.get()),
         )
         self.save_button.grid(padx=5, pady=5, columnspan=2, row=1)
 
@@ -273,7 +272,7 @@ class UI(TkinterDnD.Tk):
         width, height = GetSystemMetrics(0), GetSystemMetrics(1)
         server_win = ahk.win_get(title=cfg.selected_version)
         if server_win:
-            server_win.move(x=-5, y=0, width=width / 2, height=height)
+            server_win.move(x="-5", y="0", width=width / 2, height=height)
         else:
             args = ["wt", "-d", cfg.server_folder, cfg.server_exe]
             subprocess.Popen(args, stdout=subprocess.PIPE)
@@ -282,7 +281,7 @@ class UI(TkinterDnD.Tk):
         auto_start = cfg.getboolean("general", "auto_start_launcher")
         if auto_start:
             server_win = ahk.win_wait(title=cfg.selected_version, timeout=5)
-            server_win.move(x=-5, y=0, width=width / 2, height=height)
+            server_win.move(x="-5", y="0", width=width / 2, height=height)
             self.auto_start_countdown(cfg.wait_time)
             self.start_thread(self.start_launcher)
         self.start_launcher_button.configure(text="Start Launcher")
@@ -337,7 +336,7 @@ class UI(TkinterDnD.Tk):
         self.version_entry_var = tk.StringVar(self, value="x.x.x")
         self.version_entry = ctk.CTkEntry(
             self.add_version_frame,
-            placeholder_text=self.version_entry_var,
+            placeholder_text=self.version_entry_var.get(),
             textvariable=self.version_entry_var,
             font=("Fire Code", 12),
         )
@@ -350,7 +349,7 @@ class UI(TkinterDnD.Tk):
         self.spt_folder_entry_var = tk.StringVar(self, value="path/to/SPTFolder")
         self.spt_folder_entry = ctk.CTkEntry(
             self.add_version_frame,
-            placeholder_text=self.spt_folder_entry_var,
+            placeholder_text=self.spt_folder_entry_var.get(),
             textvariable=self.spt_folder_entry_var,
             font=("Fire Code", 12),
         )
@@ -365,7 +364,7 @@ class UI(TkinterDnD.Tk):
         )
         self.profile_id_entry = ctk.CTkEntry(
             self.add_version_frame,
-            placeholder_text=self.profile_id_entry_var,
+            placeholder_text=self.profile_id_entry_var.get(),
             textvariable=self.profile_id_entry_var,
             font=("Fire Code", 12),
         )
@@ -391,7 +390,7 @@ class UI(TkinterDnD.Tk):
         if cfg.selected_version not in cfg.sections():
             print("not in cfg")
             cfg.write_config("prog_data", "selected_version", cfg.selected_version)
-            utils.add_new_version_data(
+            cfg.add_new_version_data(
                 cfg.selected_version, cfg.server_folder, cfg.profile_id
             )
         else:
@@ -440,8 +439,8 @@ class UI(TkinterDnD.Tk):
         self.file_entry_box.bind("<<Paste>>", lambda x: self.entry_box_paste(x))
         self.file_entry_box.grid(padx=5, pady=5, row=1, column=0)
 
-        self.file_entry_box.drop_target_register(DND_FILES)
-        self.file_entry_box.dnd_bind("<<Drop>>", self.entry_box_drop)
+        self.file_entry_box.drop_target_register(DND_FILES)  # type: ignore
+        self.file_entry_box.dnd_bind("<<Drop>>", self.entry_box_drop)  # type: ignore
 
         self.install_button = ctk.CTkButton(
             self.version_frame, text="Install", command=self.install_button_cb
@@ -598,7 +597,7 @@ class UI(TkinterDnD.Tk):
         self.scrollbar = ttk.Scrollbar(
             self.mods_tab, orient=tk.VERTICAL, command=self.mods_table.yview
         )
-        self.mods_table.configure(yscroll=self.scrollbar.set)
+        self.mods_table.configure(yscroll=self.scrollbar.set)  # type: ignore
         self.scrollbar.grid(row=3, rowspan=2, column=1, sticky="ns")
 
     # Tools frame creation

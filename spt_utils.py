@@ -1,8 +1,11 @@
 # vscode-fold=2
 import os
+import webbrowser
 from configparser import ConfigParser
 
+import requests
 from ahk import AHK, Hotkey
+from bs4 import BeautifulSoup
 
 ahk = AHK()
 cwd = os.getcwd()
@@ -10,9 +13,8 @@ CONFIG_FILE = os.path.join(cwd, "new_spt.ini")
 
 
 class Config(ConfigParser):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
-        # self.read(CONFIG_FILE)
         self.read_config()
 
     def read_config(self):
@@ -24,7 +26,7 @@ class Config(ConfigParser):
             os.path.join(self.server_folder, "user/mods", each)
             for each in self.mods_list
         ]
-        self.mods_folder: str = os.path.join(self.server_folder, "user\mods")
+        self.mods_folder: str = os.path.join(self.server_folder, "user\\mods")
         self.auto_start_launcher: str = self.get("general", "auto_start_launcher")
         self.server_exe: str = os.path.join(self.server_folder, "Aki.Server.exe")
         self.launcher_exe: str = os.path.join(self.server_folder, "Aki.Launcher.exe")
@@ -94,3 +96,18 @@ class Hotkeys:
         self.hide_hotkey = Hotkey(ahk, self.hotkeys["hide_launcher"], script)
         if not self.hide_hotkey.running:
             self.hide_hotkey.start()
+
+
+class ModManager:
+    def __init__(self, cfg: Config):
+        cfg.read_config()
+
+    def parse_urls(self, url):
+        resp = requests.get(url)
+        soup = BeautifulSoup(resp.text, features="html.parser")
+        dl_button = soup.find_all(attrs={"itemprop": "downloadUrl"})
+        dl_link = dl_button[0].get("href")
+        self.open_browser(dl_link)
+
+    def open_browser(self, url):
+        webbrowser.open_new_tab(url)
