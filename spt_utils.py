@@ -56,6 +56,7 @@ class Utils:
         # self.cfg = cfg
         self.selected_version = cfg.get("prog_data", "selected_version")
         self.server_folder = cfg.get(self.selected_version, "folder_path", fallback=cwd)
+        self.hotkeys = Hotkeys(cfg)
 
     def open_spt_dir(self):
         ahk.run_script(f"Run {self.server_folder}")

@@ -16,20 +16,16 @@ import pandas as pd
 import py7zr
 from ahk import AHK
 from ahk.directives import NoTrayIcon
-
-# from PIL import Image
+from PIL import Image
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from win32api import GetSystemMetrics
 
-from spt_utils import Config, Hotkeys, Mod, ModManager, Utils
+from spt_utils import Config, Mod, Utils
 
 ahk = AHK(directives=[NoTrayIcon])
 
 
 class UI(TkinterDnD.Tk):
-    global cfg
-    global utils
-
     def __init__(self):
         super().__init__()
         self.title("SPT Launcher")
@@ -54,8 +50,26 @@ class UI(TkinterDnD.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=0)
 
-        cfg.read_config()
-        self.auto_start_launcher = cfg.getboolean("general", "auto_start_launcher")
+        self.cfg = Config()
+        self.cfg.read_config()
+        self.auto_start_launcher = self.cfg.getboolean("general", "auto_start_launcher")
+
+        self.utils = Utils(self.cfg)
+
+        self.settings_img = Image.open("data\\settings.png")
+        self.enable_disable_btn_img = Image.open("data\\button.png")
+
+        self.images = {
+            "settings": tk.PhotoImage(file="data\\settings.png"),
+            "add": tk.PhotoImage(file="data\\add.png"),
+            # "button": tk.PhotoImage(file="data\\button.png"),
+            "button": ctk.CTkImage(
+                light_image=self.enable_disable_btn_img, size=(10, 10)
+            ),
+        }
+
+        self.cfg.read_config()
+        self.auto_start_launcher = self.cfg.getboolean("general", "auto_start_launcher")
 
         self.create_widgets()
 
@@ -63,7 +77,6 @@ class UI(TkinterDnD.Tk):
         self.launcher_running = False
 
     def create_widgets(self):
-
         # @ Options frame
         self.options_frame = ctk.CTkFrame(self, height=50, width=370)
         # Using pack makes the frames dynamcially resize
@@ -147,19 +160,19 @@ class UI(TkinterDnD.Tk):
         self.open_dir_button = ctk.CTkButton(
             self.mods_tab_frame,
             text="Open SPT Folder",
-            command=utils.open_spt_dir,
+            command=self.utils.open_spt_dir,
             font=("Fira Code", 12),
         )
         self.open_dir_button.grid(padx=5, pady=5, row=0, column=2)
 
         # open mod table
-        self.open_mods_window_button = ctk.CTkButton(
+        self.open_mod_table_btn = ctk.CTkButton(
             self.mods_tab_frame,
-            text="View Enabled Mods",
+            text="View Mods Table",
             command=self.build_mods_table,
             font=("Fira Code", 12),
         )
-        self.open_mods_window_button.grid(padx=5, pady=5, row=1, column=2)
+        self.open_mod_table_btn.grid(padx=5, pady=5, row=1, column=2)
 
         # install mod button
         self.install_mod_button = ctk.CTkButton(
@@ -189,7 +202,7 @@ class UI(TkinterDnD.Tk):
         self.auto_start_label.grid(padx=5, pady=5, column=0, row=0)
 
         self.wait_time = tk.StringVar(
-            self, value=cfg.get(cfg.selected_version, "launcher_wait_time")
+            self, value=self.cfg.get(self.cfg.selected_version, "launcher_wait_time")
         )
         self.auto_start_entry = ctk.CTkEntry(
             self.settings_tab_frame,
@@ -220,7 +233,7 @@ class UI(TkinterDnD.Tk):
             font=("Fira Code", 12),
         )
         self.version_select.grid(padx=5, pady=5, columnspan=2, row=0)
-        self.version_select.set(cfg.selected_version)
+        self.version_select.set(self.cfg.selected_version)
 
         # @ Character Info inside Version Frame
         # name
@@ -270,23 +283,27 @@ class UI(TkinterDnD.Tk):
     def start_server(self):
         # start server
         width, height = GetSystemMetrics(0), GetSystemMetrics(1)
-        server_win = ahk.win_get(title=cfg.selected_version)
+        server_win = ahk.win_get(title=self.cfg.selected_version)
         if server_win:
             server_win.move(x="-5", y="0", width=width / 2, height=height)
         else:
-            args = ["wt", "-d", cfg.server_folder, cfg.server_exe]
-            subprocess.Popen(args, stdout=subprocess.PIPE)
-            print(subprocess.PIPE)
+            args = ["wt", "-d", self.cfg.server_folder, self.cfg.server_exe]
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE)
+            # while True:
+            #     for line in proc.stdout.readline():
+            #         if line:
+            #             print(line)
+            #         if not line:
+            #             break
 
-        auto_start = cfg.getboolean("general", "auto_start_launcher")
+        auto_start = self.cfg.getboolean("general", "auto_start_launcher")
         if auto_start:
-            server_win = ahk.win_wait(title=cfg.selected_version, timeout=5)
+            server_win = ahk.win_wait(title=self.cfg.selected_version, timeout=5)
             server_win.move(x="-5", y="0", width=width / 2, height=height)
-            self.auto_start_countdown(cfg.wait_time)
+            self.auto_start_countdown(self.cfg.wait_time)
             self.start_thread(self.start_launcher)
         self.start_launcher_button.configure(text="Start Launcher")
         self.server_running = True
-        self.create_tools_frame()
         # utils.hide_window("SPT Launcher")
 
     def start_launcher(self):
@@ -294,7 +311,7 @@ class UI(TkinterDnD.Tk):
         if win:
             win.activate()
         else:
-            subprocess.Popen(rf"{cfg.launcher_exe}", cwd=cfg.server_folder)
+            subprocess.Popen(rf"{self.cfg.launcher_exe}", cwd=self.cfg.server_folder)
         self.launcher_running = True
 
     # events
@@ -303,14 +320,14 @@ class UI(TkinterDnD.Tk):
         print(state)
         if state == "1":
             self.auto_start_launcher = True
-            cfg.write_config("general", "auto_start_launcher", "True")
+            self.cfg.write_config("general", "auto_start_launcher", "True")
         else:
             self.auto_start_launcher = False
-            cfg.write_config("general", "auto_start_launcher", "False")
+            self.cfg.write_config("general", "auto_start_launcher", "False")
 
     def get_versions(self):
         versions = []
-        for vers in cfg.sections():
+        for vers in self.cfg.sections():
             if vers.startswith("SPT-AKI"):
                 versions.append(vers)
         return versions
@@ -319,8 +336,8 @@ class UI(TkinterDnD.Tk):
         if choice == "Add New Version":
             self.new_version_window()
         else:
-            cfg.selected_version = choice
-            cfg.write_config("prog_data", "selected_version", choice)
+            self.cfg.selected_version = choice
+            self.cfg.write_config("prog_data", "selected_version", choice)
             self.update_char_info()
 
     def new_version_window(self):
@@ -380,18 +397,20 @@ class UI(TkinterDnD.Tk):
 
     def add_new_version(self):
         self.add_new_version_window.destroy()
-        cfg.selected_version = "SPT-AKI " + self.version_entry_var.get()
-        cfg.server_folder = self.spt_folder_entry_var.get()
-        cfg.profile_id = self.profile_id_entry_var.get()
+        self.cfg.selected_version = "SPT-AKI " + self.version_entry_var.get()
+        self.cfg.server_folder = self.spt_folder_entry_var.get()
+        self.cfg.profile_id = self.profile_id_entry_var.get()
         versions: list = self.version_select.cget("values")
-        versions.insert(1, cfg.selected_version)
+        versions.insert(1, self.cfg.selected_version)
         self.version_select.configure(values=versions)
-        self.version_select.set(cfg.selected_version)
-        if cfg.selected_version not in cfg.sections():
+        self.version_select.set(self.cfg.selected_version)
+        if self.cfg.selected_version not in self.cfg.sections():
             print("not in cfg")
-            cfg.write_config("prog_data", "selected_version", cfg.selected_version)
-            cfg.add_new_version_data(
-                cfg.selected_version, cfg.server_folder, cfg.profile_id
+            self.cfg.write_config(
+                "prog_data", "selected_version", self.cfg.selected_version
+            )
+            self.cfg.add_new_version_data(
+                self.cfg.selected_version, self.cfg.server_folder, self.cfg.profile_id
             )
         else:
             print("in cfg")
@@ -400,8 +419,8 @@ class UI(TkinterDnD.Tk):
     def save_button_cb(self, **kwargs):
         print(kwargs["wait_time"])
         if kwargs["wait_time"]:
-            cfg.write_config(
-                cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
+            self.cfg.write_config(
+                self.cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
             )
 
     def show_frame(self, frames=[]):
@@ -417,12 +436,12 @@ class UI(TkinterDnD.Tk):
         info_frames = [f for f in self.version_frame.children.values()]
         self.hide_frame(frames=info_frames)
         w = self.w + 150
-        h = self.h + 150
+        h = self.h + 170
         self.geometry("%dx%d" % (w, h))
 
         self.install_mod_label = ctk.CTkLabel(
             self.options_frame,
-            text=f"Drag and Drop to install to {cfg.mods_folder}",
+            text=f"Drag and Drop to install to {self.cfg.mods_folder}",
             font=("Fira Code", 10),
         )
         self.install_mod_label.grid(padx=5, pady=5, row=0, column=0)
@@ -435,7 +454,7 @@ class UI(TkinterDnD.Tk):
         )
         self.go_back_button.grid(padx=5, pady=5, row=0, column=0)
 
-        self.file_entry_box = ctk.CTkTextbox(self.options_frame, height=300, width=300)
+        self.file_entry_box = ctk.CTkTextbox(self.options_frame, height=300, width=450)
         self.file_entry_box.bind("<<Paste>>", lambda x: self.entry_box_paste(x))
         self.file_entry_box.grid(padx=5, pady=5, row=1, column=0)
 
@@ -462,7 +481,7 @@ class UI(TkinterDnD.Tk):
                         info = zip.infolist()[-1]
                         name = info.filename.split("mods/")[1]
 
-                    install_path = os.path.join(cfg.mods_folder, name)
+                    install_path = os.path.join(self.cfg.mods_folder, name)
                     if os.path.exists(install_path):
                         print(f"{install_path} already exists. Deleting old")
                         shutil.rmtree(install_path)
@@ -474,7 +493,7 @@ class UI(TkinterDnD.Tk):
                 with py7zr.SevenZipFile(f, "r") as zip:
                     name = zip.getnames()[0]
                     print(f"Name: {name}")
-                    install_path = os.path.join(cfg.mods_folder, name)
+                    install_path = os.path.join(self.cfg.mods_folder, name)
                     if os.path.exists(install_path):
                         print(f"{install_path} already exists. Deleting old")
                         shutil.rmtree(install_path)
@@ -514,12 +533,25 @@ class UI(TkinterDnD.Tk):
         self.create_widgets()
         self.tab_view.set(tab)
 
+    def enable_disable_button(self):
+        # button = widgets.ToggleButton(
+        #     value=False,
+        #     description="Enable" if row["enabled"] else "Disable",
+        #     button_style="success" if row["enabled"] else "",
+        # )
+        # return button
+        self.toggle_button = ctk.CTkButton(
+            self, image=self.images["button"], width=10, height=10
+        )
+        return self.toggle_button
+
     def get_mods_info(self):
         table_data = []
         mods = []
+        self.btn = self.enable_disable_button()
 
         # Iterate over the mod_folders list
-        for folder in cfg.mods_folders:
+        for folder in self.cfg.mods_folders:
             # Get the path to the package.json file in the current folder
             package_json_path = os.path.join(folder, "package.json")
 
@@ -538,13 +570,21 @@ class UI(TkinterDnD.Tk):
                 mods.append(mod)
 
                 # Add the data to the list
-                table_data.append({"name": name, "author": author, "version": version})
+                table_data.append(
+                    {
+                        "enable_disable": self.btn,
+                        "name": name,
+                        "author": author,
+                        "version": version,
+                    }
+                )
 
         sorted_table_data = sorted(table_data, key=lambda d: d["name"].lower())
         # Create a Pandas DataFrame from the data list
         df = pd.DataFrame(sorted_table_data)
         return df, mods
 
+    # TODO Broken
     def build_mods_table(self):
         # resize the window to make room for the table
         w = self.w + 20
@@ -566,35 +606,47 @@ class UI(TkinterDnD.Tk):
             "mystyle.Treeview.Heading", background="#1F6AA5", foreground="white"
         )
 
-        headers = ["Author", "Version"]
+        headers = ["enable_disable", "Name", "Author", "Version"]
         self.mods_table = ttk.Treeview(
-            # self.mods_window,
             self.mods_tab,
             columns=headers,
             selectmode="extended",
             style="mystyle.Treeview",
+            show=["headings"],
         )
 
+        self.mods_table.column("enable_disable", width=100, anchor="w")
+        self.mods_table.column("Name", width=100, anchor="w")
         self.mods_table.column("Author", width=100, anchor="w")
         self.mods_table.column("Version", width=100, anchor="w")
         # Set column headings
+        self.mods_table.heading("enable_disable")
+        self.mods_table.heading("Name", text="Name")
         self.mods_table.heading("Author", text="Author")
         self.mods_table.heading("Version", text="Version")
 
+        self.mods_table.grid(row=3, column=0)
+
         # Iterate through the rows in the dataframe
         df = self.get_mods_info()[0]
+        # self.btn = self.enable_disable_button()
         for index, row in df.iterrows():
-            # Insert the data into the treeview widget
             self.mods_table.insert(
                 "",
                 "end",
-                text=row["name"],
-                values=(row["author"], row["version"]),
+                # text="",
+                values=(
+                    row["enable_disable"],
+                    row["name"],
+                    row["author"],
+                    row["version"],
+                    "Enabled",
+                ),
             )
 
-        self.mods_table.grid(row=3, column=0)
+            # self.mods_table.set(iid, 0, button)
 
-        self.open_mods_window_button.configure(
+        self.open_mod_table_btn.configure(
             text="Close Mods Table", command=lambda: self.restore_window("Mods")
         )
 
@@ -604,22 +656,53 @@ class UI(TkinterDnD.Tk):
         self.mods_table.configure(yscroll=self.scrollbar.set)  # type: ignore
         self.scrollbar.grid(row=3, rowspan=2, column=1, sticky="ns")
 
-    # Tools frame creation
-    def create_tools_frame(self):
-        if self.server_running:
-            self.tools_frame.grid(row=0, column=1)
-            self.kill_server_btn = ctk.CTkButton(self.tools_frame, text="Kill Server")
-            self.kill_server_btn.grid(row=0, column=0)
+    def toggle_mod_enabled(self, iid):
+        # Get the current value of the "Enabled" column for the mod
+        current_value = self.mods_table.set(iid, "Enabled")
+
+        # Toggle the value of the "Enabled" column
+        if current_value == "Enabled":
+            new_value = "Disabled"
         else:
-            if self.tools_frame:
-                self.tools_frame.configure(True, height=1, width=1)
-        self.after(2000, self.create_tools_frame)
+            new_value = "Enabled"
+        self.mods_table.set(iid, "Enabled", new_value)
+
+        # Update the underlying data structure (e.g. pandas dataframe)
+        df = self.get_mods_info()[0]
+        df.loc[int(iid), "enabled"] = new_value == "Enabled"
+
+    def toggle_mod_state(self, mod_name):
+        """
+        Toggle the state of a mod between enabled and disabled.
+        """
+        current_state = self.mod_states[mod_name]
+        new_state = not current_state
+        self.mod_states[mod_name] = new_state
+
+        # Update the text of the button to reflect the new state
+        button = self.mods_table.set(mod_name, "action")
+        button.config(text="Disable" if new_state else "Enable")
+
+        # Move the mod to the appropriate folder based on its state
+        source_dir = self.cfg.mods_folder
+        dest_dir = (
+            os.path.join(self.cfg.server_folder, "user\\mods\\mods-disabled")
+            if new_state
+            else self.cfg.mods_folder
+        )
+        shutil.move(
+            os.path.join(source_dir, mod_name), os.path.join(dest_dir, mod_name)
+        )
+
+        # Refresh the mods table to reflect the updated state
+        self.mods_table.delete(*self.mods_table.get_children())
+        self.build_mods_table()
 
     # utils
     def get_char_info(self):
-        cfg.read_config()
+        self.cfg.read_config()
         profile_json = os.path.join(
-            cfg.server_folder, "user\\profiles\\", cfg.profile_id + ".json"
+            self.cfg.server_folder, "user\\profiles\\", self.cfg.profile_id + ".json"
         )
         with open(profile_json, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -646,23 +729,13 @@ class UI(TkinterDnD.Tk):
 
 
 def main():
-    global cfg
-    global utils
-    global sptmm
+    main = UI()
 
-    cfg = Config()
-    hotkeys = Hotkeys(cfg)
-    utils = Utils(cfg)
+    # mods = main.get_mods_info()[1]
+    # sptmm = ModManager(cfg, mods)
 
-    window = UI()
-
-    mods = window.get_mods_info()[1]
-    sptmm = ModManager(cfg, mods)
-
-    window.after(1000, hotkeys.start, window)
-    # window.after(2000, window.create_tools_frame)
-    # window.after(5000, quit)
-    window.mainloop()
+    main.after(1000, main.utils.hotkeys.start, main)
+    main.mainloop()
 
 
 if __name__ == "__main__":
