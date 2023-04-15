@@ -20,7 +20,7 @@ from PIL import Image
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from win32api import GetSystemMetrics
 
-from spt_utils import Config, Mod, Utils
+from data.spt_utils import Config, Mod, Utils
 
 ahk = AHK(directives=[NoTrayIcon])
 
