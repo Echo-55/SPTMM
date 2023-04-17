@@ -1,5 +1,8 @@
 # vscode-fold=2
 import os
+import subprocess
+import threading
+import typing
 import webbrowser
 from configparser import ConfigParser
 from dataclasses import dataclass
@@ -7,27 +10,37 @@ from dataclasses import dataclass
 import requests
 from ahk import AHK, Hotkey
 from bs4 import BeautifulSoup
+from win32api import GetSystemMetrics
+
+# from data.frames.tabs_frame
+
+if typing.TYPE_CHECKING:
+    from spt import UI
 
 ahk = AHK()
-cwd = os.getcwd()
-CONFIG_FILE = os.path.join(cwd, "new_spt.ini")
+CONFIG_FILE = os.path.join(os.getcwd(), "myconfig.ini")
 
 
 class Config(ConfigParser):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__()
+        print("Reading config file")
+        self.read(CONFIG_FILE)
+        self.versions_list = self.get_versions()
         self.read_config()
+        print(self.versions_list)
 
     def read_config(self):
-        self.read(CONFIG_FILE)
         self.selected_version: str = self.get("prog_data", "selected_version")
         self.server_folder: str = self.get(self.selected_version, "folder_path")
-        self.mods_list = os.listdir(os.path.join(self.server_folder, "user/mods"))
-        self.mods_folders = [
-            os.path.join(self.server_folder, "user/mods", each)
-            for each in self.mods_list
-        ]
-        self.mods_folder: str = os.path.join(self.server_folder, "user\\mods")
+        self.mods_folder: str = os.path.join(self.server_folder, "user/mods")
+        if os.path.exists(self.mods_folder):
+            self.mods_list = os.listdir(self.mods_folder)
+            self.mod_folders_list = [
+                os.path.join(self.mods_folder, each) for each in self.mods_list
+            ]
+        else:
+            return print("Mods folder not found")
         self.auto_start_launcher: str = self.get("general", "auto_start_launcher")
         self.server_exe: str = os.path.join(self.server_folder, "Aki.Server.exe")
         self.launcher_exe: str = os.path.join(self.server_folder, "Aki.Launcher.exe")
@@ -35,9 +48,6 @@ class Config(ConfigParser):
         self.wait_time: int = self.getint(self.selected_version, "launcher_wait_time")
 
     def write_config(self, section: str, option: str, value: str):
-        # print(section)
-        # print(option)
-        # print(value)
         self.set(section, option, value)
         with open(CONFIG_FILE, "w+") as f:
             self.write(f)
@@ -50,12 +60,21 @@ class Config(ConfigParser):
         with open(CONFIG_FILE, "w+") as f:
             self.write(f)
 
+    def get_versions(self):
+        versions = []
+        for vers in self.sections():
+            if vers.startswith("SPT-AKI"):
+                versions.append(vers)
+        return versions
+
 
 class Utils:
     def __init__(self, cfg: ConfigParser):
-        # self.cfg = cfg
+        self.cfg = cfg
         self.selected_version = cfg.get("prog_data", "selected_version")
-        self.server_folder = cfg.get(self.selected_version, "folder_path", fallback=cwd)
+        self.server_folder = cfg.get(
+            self.selected_version, "folder_path", fallback=os.getcwd()
+        )
         self.hotkeys = Hotkeys(cfg)
 
     def open_spt_dir(self):
@@ -68,6 +87,48 @@ class Utils:
     def show_window(self, window_title):
         script = f"WinActivate {window_title}"
         ahk.run_script(script)
+
+    # callbacks
+    def start_thread(self, func):
+        thread = threading.Thread(target=func)
+        thread.start()
+
+    def start_server(self, master: "UI"):
+        # start server
+        width, height = GetSystemMetrics(0), GetSystemMetrics(1)
+        try:
+            server_win = ahk.win_wait(title=master.cfg.selected_version, timeout=5)
+        except TimeoutError:
+            server_win = ahk.win_wait(title=master.cfg.versions_list[0], timeout=5)
+        if server_win:
+            server_win.move(x="-5", y="0", width=width / 2, height=height)
+        else:
+            args = ["wt", "-d", master.cfg.server_folder, master.cfg.server_exe]
+            subprocess.Popen(args, stdout=subprocess.PIPE)
+
+        auto_start = self.cfg.getboolean("general", "auto_start_launcher")
+        if auto_start:
+            try:
+                server_win = ahk.win_wait(title=master.cfg.selected_version, timeout=5)
+            except TimeoutError:
+                server_win = ahk.win_wait(title=master.cfg.versions_list[0], timeout=5)
+            server_win.move(x="-5", y="0", width=width / 2, height=height)
+            # master.auto_start_countdown(master.cfg.wait_time)
+            master.launcher_tab_frame.auto_start_countdown(master.cfg.wait_time)
+            self.start_thread(self.start_launcher)
+        master.launcher_tab_frame.start_launcher_button.configure(text="Start Launcher")
+        self.server_running = True
+        # utils.hide_window("SPT Launcher")
+
+    def start_launcher(self, master: "UI"):
+        win = ahk.win_get(title="Aki.Launcher")
+        if win:
+            win.activate()
+        else:
+            subprocess.Popen(
+                rf"{master.cfg.launcher_exe}", cwd=master.cfg.server_folder
+            )
+        self.launcher_running = True
 
 
 class Hotkeys:

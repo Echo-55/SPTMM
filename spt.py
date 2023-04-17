@@ -3,12 +3,8 @@ import json
 import os
 import re
 import shutil
-import subprocess
-import threading
 import tkinter as tk
-import webbrowser
 import zipfile
-from time import sleep
 from tkinter import ttk
 
 import customtkinter as ctk
@@ -18,8 +14,16 @@ from ahk import AHK
 from ahk.directives import NoTrayIcon
 from PIL import Image
 from tkinterdnd2 import DND_FILES, TkinterDnD
-from win32api import GetSystemMetrics
 
+# from data.frames import
+from data.frames.options_frame import OptionsFrame
+from data.frames.tabs_frame import (
+    LauncherTabFrame,
+    MasterTabsFrame,
+    ModsTabFrame,
+    SettingsTabFrame,
+)
+from data.frames.version_frame import VersionFrame
 from data.spt_utils import Config, Mod, Utils
 
 ahk = AHK(directives=[NoTrayIcon])
@@ -31,6 +35,30 @@ class UI(TkinterDnD.Tk):
         self.title("SPT Launcher")
         self.configure(bg="#282828")
 
+        self.center_window()
+
+        self.cfg = Config()
+        self.cfg.read_config()
+
+        self.utils = Utils(self.cfg)
+
+        self.settings_img = Image.open("data\\assets\\settings.png")
+        self.enable_disable_btn_img = Image.open("data\\assets\\button.png")
+
+        self.images = {
+            "settings": tk.PhotoImage(file="data\\assets\\settings.png"),
+            "add": tk.PhotoImage(file="data\\assets\\add.png"),
+            "button": ctk.CTkImage(
+                light_image=self.enable_disable_btn_img, size=(10, 10)
+            ),
+        }
+
+        self.create_widgets()
+
+        self.server_running = False
+        self.launcher_running = False
+
+    def center_window(self):
         self.w = 600  # width for the Tk root
         self.h = 200  # height for the Tk root
         self.minsize(self.w, self.h)
@@ -50,378 +78,34 @@ class UI(TkinterDnD.Tk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=0)
 
-        self.cfg = Config()
-        self.cfg.read_config()
-        self.auto_start_launcher = self.cfg.getboolean("general", "auto_start_launcher")
-
-        self.utils = Utils(self.cfg)
-
-        self.settings_img = Image.open("data\\settings.png")
-        self.enable_disable_btn_img = Image.open("data\\button.png")
-
-        self.images = {
-            "settings": tk.PhotoImage(file="data\\settings.png"),
-            "add": tk.PhotoImage(file="data\\add.png"),
-            # "button": tk.PhotoImage(file="data\\button.png"),
-            "button": ctk.CTkImage(
-                light_image=self.enable_disable_btn_img, size=(10, 10)
-            ),
-        }
-
-        self.cfg.read_config()
-        self.auto_start_launcher = self.cfg.getboolean("general", "auto_start_launcher")
-
-        self.create_widgets()
-
-        self.server_running = False
-        self.launcher_running = False
-
     def create_widgets(self):
         # @ Options frame
-        self.options_frame = ctk.CTkFrame(self, height=50, width=370)
+        self.options_frame = OptionsFrame(self)
+        self.options_frame.grid(padx=5, pady=5, column=0, sticky=tk.NSEW)
         # Using pack makes the frames dynamcially resize
         # self.options_frame.pack(padx=10, pady=10, side='left', fill='both', expand=True)
-        self.options_frame.grid(padx=5, pady=5, column=0, sticky=tk.NSEW)
 
-        # @ Tabview
-        self.tab_view = ctk.CTkTabview(self.options_frame, height=50, width=350)
-        self.tab_view.grid(padx=5, pady=5, column=0, row=0)
-
-        self.launcher_tab = self.tab_view.add("Launcher")
-
-        self.mods_tab = self.tab_view.add("Mods")
-        self.mods_tab.grid_columnconfigure(0, weight=2)
-
-        self.settings_tab = self.tab_view.add("Settings")
-        self.settings_tab.grid_columnconfigure(0, weight=2)
+        # @ Tabs frame
+        self.tabs_frame = MasterTabsFrame(self, self.options_frame)
+        self.tabs_frame.grid(padx=5, pady=5, column=0, row=0)
 
         # @ Launcher tab
-        self.launcher_tab_frame = ctk.CTkFrame(self.launcher_tab)
-        # self.start_buttons_frame.pack(padx=10, pady=10, side='right', fill='both', expand=True)
+        self.launcher_tab_frame = LauncherTabFrame(self, self.tabs_frame)
         self.launcher_tab_frame.grid(padx=5, pady=5, column=0, row=2)
-        self.start_server_button = ctk.CTkButton(
-            self.launcher_tab_frame,
-            width=170,
-            height=28,
-            text="Start Server",
-            command=lambda: self.start_thread(self.start_server),
-            font=("Fira Code", 12),
-            hover_color="#487014",
-            border_width=2,
-            border_color="#487014",
-        )
-        self.start_server_button.grid(row=0, column=1, sticky="w", padx=5, pady=5)
-        self.start_launcher_button = ctk.CTkButton(
-            self.launcher_tab_frame,
-            width=170,
-            height=28,
-            text="Start Launcher",
-            command=lambda: self.start_thread(self.start_launcher),
-            font=("Fira Code", 12),
-            hover_color="#487014",
-            border_width=2,
-            border_color="#487014",
-        )
-        self.start_launcher_button.grid(row=0, column=2, sticky="w", padx=5, pady=5)
 
-        if self.auto_start_launcher:
-            self.auto_start_var = tk.StringVar(
-                self, value="1", name="self.auto_start_var"
-            )
-        else:
-            self.auto_start_var = tk.StringVar(
-                self, value="0", name="self.auto_start_var"
-            )
-
-        self.auto_start_launcher_checkbox = ctk.CTkCheckBox(
-            self.launcher_tab,
-            text="Auto Start Launcher",
-            command=self.autostart_checkbox_event,
-            variable=self.auto_start_var,
-            onvalue=1,
-            offvalue=0,
-            font=("Fira Code", 10),
-            width=15,
-            height=15,
-            checkbox_width=15,
-            checkbox_height=15,
-        )
-        self.auto_start_launcher_checkbox.grid(padx=5, pady=5, row=3, column=0)
-
-        if self.auto_start_launcher:
-            self.auto_start_launcher_checkbox.select(True)
-
-        # @ Mods tab
-        # @ Open dir and mod table inside options_frame
-        self.mods_tab_frame = ctk.CTkFrame(self.mods_tab, height=50, width=370)
+        # # @ Mods tab
+        self.mods_tab_frame = ModsTabFrame(self, self.tabs_frame)
         self.mods_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky=tk.NS)
 
-        # open spt directory button
-        self.open_dir_button = ctk.CTkButton(
-            self.mods_tab_frame,
-            text="Open SPT Folder",
-            command=self.utils.open_spt_dir,
-            font=("Fira Code", 12),
-        )
-        self.open_dir_button.grid(padx=5, pady=5, row=0, column=2)
-
-        # open mod table
-        self.open_mod_table_btn = ctk.CTkButton(
-            self.mods_tab_frame,
-            text="View Mods Table",
-            command=self.build_mods_table,
-            font=("Fira Code", 12),
-        )
-        self.open_mod_table_btn.grid(padx=5, pady=5, row=1, column=2)
-
-        # install mod button
-        self.install_mod_button = ctk.CTkButton(
-            self.mods_tab_frame,
-            text="Install Mods",
-            # command=self.install_mod_window,
-            command=self.install_mod_window,
-            font=("Fira Code", 12),
-        )
-        self.install_mod_button.grid(padx=5, pady=5, row=0, column=3)
-
-        self.open_hub_button = ctk.CTkButton(
-            self.mods_tab_frame,
-            text="Open SPT Hub",
-            command=lambda: webbrowser.open_new_tab("https://hub.sp-tarkov.com/files/"),  # type: ignore
-            font=("Fira Code", 12),
-        )
-        self.open_hub_button.grid(padx=5, pady=5, row=1, column=3)
-
-        # @ Settings tab
-        self.settings_tab_frame = ctk.CTkFrame(self.settings_tab, height=50, width=370)
+        # # @ Settings tab
+        self.settings_tab_frame = SettingsTabFrame(self, self.tabs_frame)
         self.settings_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky=tk.NS)
 
-        self.auto_start_label = ctk.CTkLabel(
-            self.settings_tab_frame, text="Launcher auto-start wait time: "
-        )
-        self.auto_start_label.grid(padx=5, pady=5, column=0, row=0)
-
-        self.wait_time = tk.StringVar(
-            self, value=self.cfg.get(self.cfg.selected_version, "launcher_wait_time")
-        )
-        self.auto_start_entry = ctk.CTkEntry(
-            self.settings_tab_frame,
-            width=30,
-            height=20,
-            textvariable=self.wait_time,
-        )
-        self.auto_start_entry.grid(padx=3, pady=3, column=1, row=0)
-
-        self.save_button = ctk.CTkButton(
-            self.settings_tab_frame,
-            text="Save",
-            command=lambda: self.save_button_cb(wait_time=self.wait_time.get()),
-        )
-        self.save_button.grid(padx=5, pady=5, columnspan=2, row=1)
-
-        # @ Version Frame
-        self.version_frame = ctk.CTkFrame(self, height=30, width=500)
-        # Using pack makes the frames dynamcially resize
-        # self.version_frame.pack(padx=10, pady=10, side='right', fill='both', expand=True)
+        # # @ Version Frame
+        self.version_frame = VersionFrame(self)
         self.version_frame.grid(padx=5, pady=5, column=1, row=0, sticky=tk.NSEW)
-        versions = self.get_versions()
-        versions.append("Add New Version")
-        self.version_select = ctk.CTkOptionMenu(
-            self.version_frame,
-            values=versions,
-            command=self.select_version,
-            font=("Fira Code", 12),
-        )
-        self.version_select.grid(padx=5, pady=5, columnspan=2, row=0)
-        self.version_select.set(self.cfg.selected_version)
-
-        # @ Character Info inside Version Frame
-        # name
-        self.character_name_label = ctk.CTkLabel(
-            self.version_frame, anchor="w", text="Name: ", font=("Fira Code", 10)
-        )
-        self.character_name_label.grid(padx=1, pady=1, column=0, row=1)
-        self.char_name = tk.StringVar(
-            self.version_frame, value=self.get_char_info()["name"]
-        )
-        self.character_name = ctk.CTkLabel(
-            self.version_frame, textvariable=self.char_name, font=("Fira Code", 12)
-        )
-        self.character_name.grid(padx=1, pady=1, column=1, row=1)
-
-        # level
-        self.character_level_label = ctk.CTkLabel(
-            self.version_frame, anchor="w", text="Level: ", font=("Fira Code", 10)
-        )
-        self.character_level_label.grid(padx=1, pady=1, column=0, row=2)
-        self.char_level = tk.StringVar(
-            self.version_frame, value=self.get_char_info()["level"]
-        )
-        self.character_level = ctk.CTkLabel(
-            self.version_frame, textvariable=self.char_level, font=("Fira Code", 12)
-        )
-        self.character_level.grid(padx=1, pady=1, column=1, row=2)
-
-        # edition
-        self.character_edition_label = ctk.CTkLabel(
-            self.version_frame, anchor="w", text="Edition: ", font=("Fira Code", 10)
-        )
-        self.character_edition_label.grid(padx=1, pady=1, column=0, row=3)
-        self.char_edition = tk.StringVar(
-            self.version_frame, value=self.get_char_info()["edition"]
-        )
-        self.character_edition = ctk.CTkLabel(
-            self.version_frame, textvariable=self.char_edition, font=("Fira Code", 12)
-        )
-        self.character_edition.grid(padx=1, pady=1, column=1, row=3)
-
-    # callbacks
-    def start_thread(self, func):
-        thread = threading.Thread(target=func)
-        thread.start()
-
-    def start_server(self):
-        # start server
-        width, height = GetSystemMetrics(0), GetSystemMetrics(1)
-        server_win = ahk.win_get(title=self.cfg.selected_version)
-        if server_win:
-            server_win.move(x="-5", y="0", width=width / 2, height=height)
-        else:
-            args = ["wt", "-d", self.cfg.server_folder, self.cfg.server_exe]
-            proc = subprocess.Popen(args, stdout=subprocess.PIPE)
-            # while True:
-            #     for line in proc.stdout.readline():
-            #         if line:
-            #             print(line)
-            #         if not line:
-            #             break
-
-        auto_start = self.cfg.getboolean("general", "auto_start_launcher")
-        if auto_start:
-            server_win = ahk.win_wait(title=self.cfg.selected_version, timeout=5)
-            server_win.move(x="-5", y="0", width=width / 2, height=height)
-            self.auto_start_countdown(self.cfg.wait_time)
-            self.start_thread(self.start_launcher)
-        self.start_launcher_button.configure(text="Start Launcher")
-        self.server_running = True
-        # utils.hide_window("SPT Launcher")
-
-    def start_launcher(self):
-        win = ahk.win_get(title="Aki.Launcher")
-        if win:
-            win.activate()
-        else:
-            subprocess.Popen(rf"{self.cfg.launcher_exe}", cwd=self.cfg.server_folder)
-        self.launcher_running = True
 
     # events
-    def autostart_checkbox_event(self):
-        state = self.auto_start_var.get()
-        print(state)
-        if state == "1":
-            self.auto_start_launcher = True
-            self.cfg.write_config("general", "auto_start_launcher", "True")
-        else:
-            self.auto_start_launcher = False
-            self.cfg.write_config("general", "auto_start_launcher", "False")
-
-    def get_versions(self):
-        versions = []
-        for vers in self.cfg.sections():
-            if vers.startswith("SPT-AKI"):
-                versions.append(vers)
-        return versions
-
-    def select_version(self, choice: str):
-        if choice == "Add New Version":
-            self.new_version_window()
-        else:
-            self.cfg.selected_version = choice
-            self.cfg.write_config("prog_data", "selected_version", choice)
-            self.update_char_info()
-
-    def new_version_window(self):
-        self.add_new_version_window = ctk.CTkToplevel(self)
-        self.add_new_version_window.title("Add New Version")
-        self.add_version_frame = ctk.CTkFrame(self.add_new_version_window)
-        self.add_version_frame.grid()
-
-        self.version_entry_label = ctk.CTkLabel(
-            self.add_version_frame, text="Version: SPT-AKI", font=("Fire Code", 12)
-        )
-        self.version_entry_label.grid(padx=5, pady=5, row=0, column=0)
-        self.version_entry_var = tk.StringVar(self, value="x.x.x")
-        self.version_entry = ctk.CTkEntry(
-            self.add_version_frame,
-            placeholder_text=self.version_entry_var.get(),
-            textvariable=self.version_entry_var,
-            font=("Fire Code", 12),
-        )
-        self.version_entry.grid(padx=5, pady=5, row=0, column=1)
-
-        self.spt_folder_label = ctk.CTkLabel(
-            self.add_version_frame, text="SPT Folder:", font=("Fire Code", 12)
-        )
-        self.spt_folder_label.grid(padx=5, pady=5, row=1, column=0)
-        self.spt_folder_entry_var = tk.StringVar(self, value="path/to/SPTFolder")
-        self.spt_folder_entry = ctk.CTkEntry(
-            self.add_version_frame,
-            placeholder_text=self.spt_folder_entry_var.get(),
-            textvariable=self.spt_folder_entry_var,
-            font=("Fire Code", 12),
-        )
-        self.spt_folder_entry.grid(padx=5, pady=5, row=1, column=1)
-
-        self.profile_id_label = ctk.CTkLabel(
-            self.add_version_frame, text="Profile ID: ", font=("Fire Code", 12)
-        )
-        self.profile_id_label.grid(padx=5, pady=5, row=2, column=0)
-        self.profile_id_entry_var = tk.StringVar(
-            self, value="5779936a22cb6908c7eb84f2.json"
-        )
-        self.profile_id_entry = ctk.CTkEntry(
-            self.add_version_frame,
-            placeholder_text=self.profile_id_entry_var.get(),
-            textvariable=self.profile_id_entry_var,
-            font=("Fire Code", 12),
-        )
-        self.profile_id_entry.grid(padx=5, pady=5, row=2, column=1)
-
-        self.add_version_button = ctk.CTkButton(
-            self.add_version_frame,
-            text="Done",
-            command=self.add_new_version,
-            font=("Fire Code", 12),
-        )
-        self.add_version_button.grid(padx=5, pady=5, row=3, columnspan=2)
-
-    def add_new_version(self):
-        self.add_new_version_window.destroy()
-        self.cfg.selected_version = "SPT-AKI " + self.version_entry_var.get()
-        self.cfg.server_folder = self.spt_folder_entry_var.get()
-        self.cfg.profile_id = self.profile_id_entry_var.get()
-        versions: list = self.version_select.cget("values")
-        versions.insert(1, self.cfg.selected_version)
-        self.version_select.configure(values=versions)
-        self.version_select.set(self.cfg.selected_version)
-        if self.cfg.selected_version not in self.cfg.sections():
-            print("not in cfg")
-            self.cfg.write_config(
-                "prog_data", "selected_version", self.cfg.selected_version
-            )
-            self.cfg.add_new_version_data(
-                self.cfg.selected_version, self.cfg.server_folder, self.cfg.profile_id
-            )
-        else:
-            print("in cfg")
-        self.update_char_info()
-
-    def save_button_cb(self, **kwargs):
-        print(kwargs["wait_time"])
-        if kwargs["wait_time"]:
-            self.cfg.write_config(
-                self.cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
-            )
 
     def show_frame(self, frames=[]):
         pass
@@ -504,7 +188,8 @@ class UI(TkinterDnD.Tk):
 
             # TODO URLS
             if f.startswith("http"):
-                sptmm.parse_urls(f)
+                # sptmm.parse_urls(f)
+                pass
 
     def entry_box_paste(self, data):
         text = self.file_entry_box.get(1.0, "end")
@@ -551,7 +236,7 @@ class UI(TkinterDnD.Tk):
         self.btn = self.enable_disable_button()
 
         # Iterate over the mod_folders list
-        for folder in self.cfg.mods_folders:
+        for folder in self.cfg.mod_folders_list:
             # Get the path to the package.json file in the current folder
             package_json_path = os.path.join(folder, "package.json")
 
@@ -697,35 +382,6 @@ class UI(TkinterDnD.Tk):
         # Refresh the mods table to reflect the updated state
         self.mods_table.delete(*self.mods_table.get_children())
         self.build_mods_table()
-
-    # utils
-    def get_char_info(self):
-        self.cfg.read_config()
-        profile_json = os.path.join(
-            self.cfg.server_folder, "user\\profiles\\", self.cfg.profile_id + ".json"
-        )
-        with open(profile_json, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        name = data["characters"]["pmc"]["Info"]["Nickname"]
-        level = data["characters"]["pmc"]["Info"]["Level"]
-        edition = data["info"]["edition"]
-        char_info = {"name": name, "level": level, "edition": edition}
-        return char_info
-
-    def update_char_info(self):
-        data = self.get_char_info()
-        self.char_name.set(data["name"])
-        self.char_level.set(data["level"])
-        self.char_edition.set(data["edition"])
-
-    def auto_start_countdown(self, t: int):
-        while t >= 0:
-            mins, secs = divmod(t, 60)
-            # print(secs)
-            sleep(1)
-            t -= 1
-            self.start_launcher_button.configure(text=(str(secs)))
-        self.start_launcher_button.configure(text="Starting...")
 
 
 def main():
