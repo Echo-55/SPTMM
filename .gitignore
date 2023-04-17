@@ -1,5 +1,9 @@
 # my stuff
 myconfig.ini
+*.code-workspace
+.gitignore
+.vscode
+spt.ahk
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
