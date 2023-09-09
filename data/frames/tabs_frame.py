@@ -28,13 +28,13 @@ class MasterTabsFrame(ctk.CTkTabview):
     width = 350
     height = 50
 
-    def __init__(self, master: "UI", parent: "OptionsFrame", **kwargs):
+    def __init__(self, master_window: "UI", parent: "OptionsFrame", **kwargs):
         super().__init__(
             parent,
             width=self.width,
             height=self.height,
         )
-        self.master = master
+        self.master_window = master_window
 
         self.launcher_tab = self.add("Launcher")
 
@@ -56,9 +56,12 @@ class LauncherTabFrame(ctk.CTkFrame):
         parent (TabsFrame): The parent frame.
     """
 
-    def __init__(self, master: "UI", parent: MasterTabsFrame, **kwargs):
+    def __init__(self, master_window: "UI", parent: MasterTabsFrame, **kwargs):
         super().__init__(parent.launcher_tab, **kwargs)
-        self.auto_start_launcher = master.cfg.getboolean(
+
+        self.master_window = master_window
+
+        self.auto_start_launcher = self.master_window.cfg.getboolean(
             "general", "auto_start_launcher"
         )
 
@@ -67,7 +70,9 @@ class LauncherTabFrame(ctk.CTkFrame):
             width=170,
             height=28,
             text="Start Server",
-            command=lambda: master.start_thread(master.start_server),
+            command=lambda: self.master_window.utils.start_thread(
+                self.master_window.utils.start_server
+            ),
             font=("Fira Code", 12),
             hover_color="#487014",
             border_width=2,
@@ -80,7 +85,9 @@ class LauncherTabFrame(ctk.CTkFrame):
             width=170,
             height=28,
             text="Start Launcher",
-            command=lambda: master.start_thread(master.start_launcher),
+            command=lambda: self.master_window.utils.start_thread(
+                self.master_window.utils.start_launcher
+            ),
             font=("Fira Code", 12),
             hover_color="#487014",
             border_width=2,
@@ -100,7 +107,7 @@ class LauncherTabFrame(ctk.CTkFrame):
         self.auto_start_launcher_checkbox = ctk.CTkCheckBox(
             self,
             text="Auto Start Launcher",
-            command=self.autostart_checkbox_event(master),
+            command=lambda: self.autostart_checkbox_event(),
             variable=self.auto_start_var,
             onvalue=1,
             offvalue=0,
@@ -115,24 +122,33 @@ class LauncherTabFrame(ctk.CTkFrame):
         if self.auto_start_launcher:
             self.auto_start_launcher_checkbox.select(True)
 
-    def autostart_checkbox_event(self, master: "UI"):
+    def autostart_checkbox_event(self):
+        """
+        Called when the autostart checkbox is clicked.\n
+        Changes the value of self.auto_start_launcher to the value of the checkbox.\n
+        """
         state = self.auto_start_var.get()
         print(state)
         if state == "1":
             self.auto_start_launcher = True
-            master.cfg.write_config("general", "auto_start_launcher", "True")
+            self.master_window.cfg.write_to_config("general", "auto_start_launcher", "True")
         else:
             self.auto_start_launcher = False
-            master.cfg.write_config("general", "auto_start_launcher", "False")
+            self.master_window.cfg.write_to_config("general", "auto_start_launcher", "False")
 
     def auto_start_countdown(self, t: int):
+        """
+        Used to display the countdown to the user by changing the text inside the start_launcher_button to the countdown.\n
+        Must be called in a thread.\n
+        """
         while t >= 0:
             mins, secs = divmod(t, 60)
-            # print(secs)
             sleep(1)
             t -= 1
-            self.start_launcher_button.configure(text=(str(secs)))
-        self.start_launcher_button.configure(text="Starting...")
+            self.start_launcher_button.configure(text=str(secs))
+        
+        # ensure that the ui is updated
+        self.master_window.after(0, self.start_launcher_button.configure(text="Starting..."))
 
 
 class ModsTabFrame(ctk.CTkFrame):
@@ -172,17 +188,18 @@ class ModsTabFrame(ctk.CTkFrame):
             # command=self.install_mod_window,
             font=("Fira Code", 12),
         )
-        self.install_mod_button.grid(padx=5, pady=5, row=0, column=3)
+        self.install_mod_button.grid(padx=5, pady=5, row=1, column=3)
 
         self.open_hub_button = ctk.CTkButton(
             self,
-            text="Open SPT Hub",
+            text="SPT Hub",
+            image=master.images["link"],
             command=lambda: webbrowser.open_new_tab(
                 "https://hub.sp-tarkov.com/files/"
             ),  # type: ignore
             font=("Fira Code", 12),
         )
-        self.open_hub_button.grid(padx=5, pady=5, row=1, column=3)
+        self.open_hub_button.grid(padx=5, pady=5, row=0, column=3)
 
 
 class SettingsTabFrame(ctk.CTkFrame):
@@ -229,6 +246,6 @@ class SettingsTabFrame(ctk.CTkFrame):
     def save_button_cb(self, **kwargs):
         master: "UI" = kwargs["master"]
         if kwargs["wait_time"]:
-            master.cfg.write_config(
+            master.cfg.write_to_config(
                 master.cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
             )

@@ -5,7 +5,9 @@ import tkinter as tk
 import typing
 
 import customtkinter as ctk
+from termcolor import cprint
 
+from data.exceptions import MissingProfileJson
 from data.windows import NewVersionWindow
 
 if typing.TYPE_CHECKING:
@@ -23,15 +25,15 @@ class VersionFrame(ctk.CTkFrame):
     width = 370
     height = 50
 
-    def __init__(self, master: "UI", **kwargs):
+    def __init__(self, master_window: "UI", **kwargs):
         super().__init__(
-            master,
+            master_window,
             width=self.width,
             height=self.height,
         )
-        self.master: UI = master
+        self.master_window: UI = master_window
 
-        self.versions_list = master.cfg.versions_list
+        self.versions_list = self.master_window.cfg.versions_list
         self.versions_list.append("Add New Version...")
 
         self.version_select_menu = ctk.CTkOptionMenu(
@@ -41,7 +43,7 @@ class VersionFrame(ctk.CTkFrame):
             font=("Fira Code", 12),
         )
         self.version_select_menu.grid(row=0, column=0, sticky="nsew", columnspan=2)
-        self.version_select_menu.set(master.cfg.selected_version)
+        self.version_select_menu.set(self.master_window.cfg.selected_version)
 
         self.char_info = self.get_char_info()
 
@@ -51,23 +53,32 @@ class VersionFrame(ctk.CTkFrame):
 
     def select_version_cb(self, value: str):
         if value == "Add New Version...":
-            NewVersionWindow(self.master, self.master.cfg)
+            NewVersionWindow(self.master_window, self.master_window.cfg)
         else:
-            self.master.cfg.selected_version = value
+            self.master_window.cfg.selected_version = value
             self.version_select_menu.set(value)
-            self.master.cfg.write_config("prog_data", "selected_version", value)
+            self.master_window.cfg.write_to_config("prog_data", "selected_version", value)
             self.update_char_info()
 
     def get_char_info(self):
-        print("Reading profile.json...")
-        self.master.cfg.read_config()
+        cprint("Reading profile.json...", "yellow")
+        # read the config file
+        self.master_window.cfg.read_config()
         profile_json = os.path.join(
-            self.master.cfg.server_folder,
+            self.master_window.cfg.server_folder,
             "user\\profiles\\",
-            self.master.cfg.profile_id + ".json",
+            self.master_window.cfg.profile_id + ".json",
         )
-        with open(profile_json, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(profile_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cprint("Profile.json read successfully.", "green")
+        except FileNotFoundError:
+            cprint("Profile.json not found.", "red")
+            raise MissingProfileJson(
+                profile_json=profile_json,
+                selected_version=self.master_window.cfg.selected_version,
+            )
         name = data["characters"]["pmc"]["Info"]["Nickname"]
         level = data["characters"]["pmc"]["Info"]["Level"]
         edition = data["info"]["edition"]
@@ -75,7 +86,7 @@ class VersionFrame(ctk.CTkFrame):
         return char_info
 
     def update_char_info(self):
-        print(self.master.cfg.selected_version)
+        print(self.master_window.cfg.selected_version)
         print("Updating character info...")
         data = self.get_char_info()
         self.char_name.set(data["name"])
