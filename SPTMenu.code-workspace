@@ -1,11 +1,8 @@
 {
-  "folders": [
-    {
-      "path": "."
-    },
-    {
-      "path": "F:\\Games\\SPT\\Client.0.13.1.3.25206"
-    }
-  ],
-  "settings": {}
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
 }
