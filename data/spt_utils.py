@@ -6,6 +6,9 @@ import typing
 import time
 from configparser import ConfigParser
 
+import customtkinter as ctk
+from PIL import Image
+
 from ahk import AHK, Hotkey
 from ahk.directives import NoTrayIcon
 from termcolor import cprint
@@ -140,6 +143,17 @@ class Utils:
         taskbar_height = win32gui.GetWindowRect(taskbar)[3] - win32gui.GetWindowRect(taskbar)[1]
         self.screen_height -= taskbar_height
 
+        self.images = {
+            "settings": ctk.CTkImage(
+                Image.open("data\\assets\\settings.png"), size=(15, 15)
+            ),
+            "add": ctk.CTkImage(Image.open("data\\assets\\add.png"), size=(15, 15)),
+            "button": ctk.CTkImage(
+                Image.open("data\\assets\\button.png"), size=(10, 10)
+            ),
+            "link": ctk.CTkImage(Image.open("data\\assets\\link.png"), size=(15, 15)),
+        }
+
     def open_spt_dir(self):
         """
         Opens the SPT folder in explorer.
@@ -149,6 +163,18 @@ class Utils:
             self.selected_version, "folder_path", fallback=os.getcwd()
         )
         os.startfile(self.server_folder)
+
+    def hide_frames(self, frames: list):
+        """
+        Hides the given frames.
+        
+        Args:
+            *args: The frames to hide.
+        Returns:
+            None
+        """
+        for frame in frames:
+            frame.grid_forget()
 
     def hide_window(self, window_title):
         """
@@ -161,7 +187,7 @@ class Utils:
         """
         win = win32gui.FindWindow(None, window_title)
         if win:
-            win32gui.ShowWindow(win, 0)
+            win32gui.ShowWindow(win, 2)
         else:
             cprint(f"Window: {window_title} not found.", "red")
 
@@ -211,7 +237,7 @@ class Utils:
         Returns:
             None
         """
-        self.master_window.launcher_tab_frame.start_launcher_button.configure(text="Launcher did not start.", text_color="red")
+        self.master_window.tabs_frame.launcher_tab_frame.start_launcher_button.configure(text="Launcher did not start.", text_color="red")
         cprint("Launcher did not start within the timeout.", "red")
 
     def start_thread(self, func, *args, **kwargs):
@@ -257,6 +283,8 @@ class Utils:
                 server_win = win32gui.FindWindow(None, self.master_window.cfg.selected_version)
                 if server_win != 0: # server_win was found, break the loop
                     cprint("Server started.", "green")
+                    # set the server_running variable to True
+                    self.master_window.server_running = True
                     # TODO: make a config option for auto moving the server window
                     # move the server window to the left 1/3 of the screen
                     win32gui.MoveWindow(server_win, self.screen_top_left[0], self.screen_top_left[1], int(self.screen_width / 3), self.screen_height, True)
@@ -283,12 +311,11 @@ class Utils:
             wait_time = self.master_window.cfg.getint(self.master_window.cfg.selected_version, "launcher_wait_time")
 
             # start the countdown in the launcher tab on the start_launcher_button
-            cd_thread = self.start_thread(self.master_window.launcher_tab_frame.auto_start_countdown, wait_time)
+            cd_thread = self.start_thread(self.master_window.tabs_frame.launcher_tab_frame.auto_start_countdown, wait_time)
 
             # wait for the countdown to finish
             cd_thread.join()
 
-            self.server_running = True
             # start the launcher
             self.start_launcher()
 
@@ -307,8 +334,11 @@ class Utils:
         launcher_title = "Aki.Launcher"
         max_wait_time = 5
 
+        # set the launcher_running variable to True
+        self.master_window.launcher_running = True
+
         # set the button text back to "Start Launcher" because I'd rather do it here than in the launcher tab frame
-        self.master_window.launcher_tab_frame.start_launcher_button.configure(text="Start Launcher")
+        self.master_window.tabs_frame.launcher_tab_frame.start_launcher_button.configure(text="Start Launcher")
 
         launcher_win = win32gui.FindWindow(None, launcher_title)
 
@@ -346,8 +376,7 @@ class Utils:
         # win32gui.MoveWindow(launcher_win, x, y, launcher_win_width, launcher_win_height, True)
         
         # # enable the launcher button
-        self.master_window.launcher_tab_frame.start_launcher_button.configure(state="normal")
-        self.launcher_running = True
+        self.master_window.tabs_frame.launcher_tab_frame.start_launcher_button.configure(state="normal")
 
 
 class Hotkeys:

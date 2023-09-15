@@ -1,32 +1,56 @@
 # vscode-fold=2
-import tkinter as tk
-
 import customtkinter as ctk
-from PIL import Image
 from tkinterdnd2 import TkinterDnD
+import ctypes as ct
 
-from data.frames.options_frame import OptionsFrame
-from data.frames.tabs_frame import (
-    LauncherTabFrame,
-    MasterTabsFrame,
-    ModsTabFrame,
-    SettingsTabFrame,
-)
+from data.frames.tabs_frame import MasterTabsFrame
 from data.frames.version_frame import VersionFrame
+
 from data.spt_mods import SPTMM
 from data.spt_utils import Config, Utils
 
-class UI(TkinterDnD.Tk):
+class UI(ctk.CTk):
+    """
+    The main window of the application.
+
+    Children:
+        - MainFrame (main_frame)
+        - MasterTabsFrame (tabs_frame)
+        - VersionFrame (version_frame)
+    """
     def __init__(self):
         super().__init__()
 
+        # Init config and utils
+        self.cfg = Config()
+        self.cfg.read_config()
+        self.utils = Utils(self)
+        self.sptmm = SPTMM(self)
+
+        # Set window properties
         self.title("SPT Launcher")
         self.configure(bg="#282828")
+        self._set_appearance_mode("Dark")
 
         self.w = 600  # width for the Tk root
         self.h = 200  # height for the Tk root
         self.minsize(self.w, self.h)
 
+        # Resize and center window
+        self.resize_and_center_window()
+
+        # Configure row and column weights for resizing purposes
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+        # Create widgets
+        self.create_widgets()
+
+        # Set running flags
+        self.server_running = False
+        self.launcher_running = False
+
+    def resize_and_center_window(self):
         # get screen width and height
         self.screen_width = self.winfo_screenwidth()  # width of the screen
         self.screen_height = self.winfo_screenheight()  # height of the screen
@@ -37,73 +61,46 @@ class UI(TkinterDnD.Tk):
 
         # set the window to a certain size and position it at the center of the screen
         self.geometry("%dx%d+%d+%d" % (self.w, self.h, self.x, self.y))
-        # self.geometry(f'{w}x{h} + {x} + {y}')
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=0)
-
-        # Init config and utils
-        self.cfg = Config()
-        self.cfg.read_config()
-        self.utils = Utils(self)
-
-        self.images = {
-            "settings": ctk.CTkImage(
-                Image.open("data\\assets\\settings.png"), size=(15, 15)
-            ),
-            "add": ctk.CTkImage(Image.open("data\\assets\\add.png"), size=(15, 15)),
-            "button": ctk.CTkImage(
-                Image.open("data\\assets\\button.png"), size=(10, 10)
-            ),
-            "link": ctk.CTkImage(Image.open("data\\assets\\link.png"), size=(15, 15)),
-        }
-
-        self.create_widgets()
-
-        self.server_running = False
-        self.launcher_running = False
 
     def create_widgets(self):
-        # @ Options frame
-        self.options_frame = OptionsFrame(self)
-        self.options_frame.grid(padx=5, pady=5, column=0, sticky=tk.NSEW)
-        # Using pack makes the frames dynamcially resize
-        # self.options_frame.pack(padx=10, pady=10, side='left', fill='both', expand=True)
+        # @ Main frame
+        self.main_frame = MainFrame(self)
+        self.main_frame.grid(padx=5, pady=5, column=0, row=0, sticky='nsew')
 
         # @ Tabs frame
-        self.tabs_frame = MasterTabsFrame(self, self.options_frame)
+        self.tabs_frame = MasterTabsFrame(self, self.main_frame)
         self.tabs_frame.grid(padx=5, pady=5, column=0, row=0)
-
-        # @ Launcher tab
-        self.launcher_tab_frame = LauncherTabFrame(self, self.tabs_frame)
-        self.launcher_tab_frame.grid(padx=5, pady=5, column=0, row=2)
-
-        # # @ Mods tab
-        self.mods_tab_frame = ModsTabFrame(self, self.tabs_frame)
-        self.mods_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky=tk.NS)
-
-        # # @ Settings tab
-        self.settings_tab_frame = SettingsTabFrame(self, self.tabs_frame)
-        self.settings_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky=tk.NS)
 
         # # @ Version Frame
         self.version_frame = VersionFrame(self)
-        self.version_frame.grid(padx=5, pady=5, column=1, row=0, sticky=tk.NSEW)
+        self.version_frame.grid(padx=5, pady=5, column=1, row=0, sticky='nsew')
 
-    def show_frame(self, frames=[]):
-        pass
+class MainFrame(ctk.CTkFrame):
+    width = 370
+    height = 50
 
-    def hide_frame(self, frames=[]):
-        for f in frames:
-            f.grid_forget()
+    def __init__(self, master: "UI", **kwargs):
+        """
+        Main frame (not version frame) within the main window.
+
+        Parent:\n
+                - UI
+
+        Children:\n
+                - MasterTabsFrame
+
+        Args:
+            master (UI): The master window.
+        """
+        super().__init__(
+            master,
+            width=self.width,
+            height=self.height,
+        )
 
 
 def main():
     main = UI()
-
-    sptmm = SPTMM(main)
-
-    # main.after(1000, main.utils.hotkeys.start, main)
     main.mainloop()
 
 

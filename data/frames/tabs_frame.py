@@ -7,13 +7,12 @@ from time import sleep
 import customtkinter as ctk
 
 if typing.TYPE_CHECKING:
-    from data.frames.options_frame import OptionsFrame
-    from spt import UI
+    from spt import UI, MainFrame
 
 
 class MasterTabsFrame(ctk.CTkTabview):
     """
-    This is the master frame that contains all the tabs.\nParent: OptionsFrame\n
+    This is the master frame that contains all the tabs.\nParent: MainFrame\n
 
     Tabs:\n
         - Launcher
@@ -22,13 +21,13 @@ class MasterTabsFrame(ctk.CTkTabview):
 
     Args:
         master (UI): The master window.
-        parent (OptionsFrame): The parent frame.
+        parent (MainFrame): The parent frame.
     """
 
     width = 350
     height = 50
 
-    def __init__(self, master_window: "UI", parent: "OptionsFrame", **kwargs):
+    def __init__(self, master_window: "UI", parent: "MainFrame", **kwargs):
         super().__init__(
             parent,
             width=self.width,
@@ -36,20 +35,33 @@ class MasterTabsFrame(ctk.CTkTabview):
         )
         self.master_window = master_window
 
-        self.launcher_tab = self.add("Launcher")
+        # add tabs
+        self.launcher_tab: LauncherTabFrame = self.add("Launcher")
 
-        self.mods_tab = self.add("Mods")
+        self.mods_tab: ModsTabFrame = self.add("Mods")
         self.mods_tab.grid_rowconfigure(0, weight=1)
         self.mods_tab.grid_columnconfigure(0, weight=1)
 
-        self.settings_tab = self.add("Settings")
+        self.settings_tab: SettingsTabFrame = self.add("Settings")
         self.settings_tab.grid_rowconfigure(0, weight=1)
         self.settings_tab.grid_columnconfigure(0, weight=1)
+
+        # add frames to tabs
+        self.launcher_tab_frame = LauncherTabFrame(self.master_window, self)
+        self.launcher_tab_frame.grid(padx=5, pady=5, column=0, row=2)
+
+        self.mods_tab_frame = ModsTabFrame(self.master_window, self)
+        self.mods_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky="ns")
+
+        self.settings_tab_frame = SettingsTabFrame(self.master_window, self)
+        self.settings_tab_frame.grid(padx=5, pady=5, row=0, column=0, sticky="ns")
 
 
 class LauncherTabFrame(ctk.CTkFrame):
     """
-    This is the frame that contains the launcher tab.\nParent: MasterTabsFrame\n
+    This is the frame that contains the launcher tab.\n
+    
+    Parent: MasterTabsFrame\n
 
     Args:
         master (UI): The master window.
@@ -160,14 +172,16 @@ class ModsTabFrame(ctk.CTkFrame):
         parent (TabsFrame): The parent frame.
     """
 
-    def __init__(self, master: "UI", parent: MasterTabsFrame, **kwargs):
+    def __init__(self, master_window: "UI", parent: MasterTabsFrame, **kwargs):
         super().__init__(parent.mods_tab, **kwargs)
+
+        self.master_window = master_window
 
         # open spt directory button
         self.open_dir_button = ctk.CTkButton(
             self,
             text="Open SPT Folder",
-            command=master.utils.open_spt_dir,
+            command=self.master_window.utils.open_spt_dir,
             font=("Fira Code", 12),
         )
         self.open_dir_button.grid(padx=5, pady=5, row=0, column=2)
@@ -176,7 +190,7 @@ class ModsTabFrame(ctk.CTkFrame):
         self.open_mod_table_btn = ctk.CTkButton(
             self,
             text="View Mods Table",
-            # command=self.build_mods_table,
+            command=self.master_window.sptmm.build_mods_table,
             font=("Fira Code", 12),
         )
         self.open_mod_table_btn.grid(padx=5, pady=5, row=1, column=2)
@@ -185,7 +199,7 @@ class ModsTabFrame(ctk.CTkFrame):
         self.install_mod_button = ctk.CTkButton(
             self,
             text="Install Mods",
-            # command=self.install_mod_window,
+            command=self.master_window.sptmm.install_mod_window,
             font=("Fira Code", 12),
         )
         self.install_mod_button.grid(padx=5, pady=5, row=1, column=3)
@@ -193,7 +207,7 @@ class ModsTabFrame(ctk.CTkFrame):
         self.open_hub_button = ctk.CTkButton(
             self,
             text="SPT Hub",
-            image=master.images["link"],
+            image=self.master_window.utils.images["link"],
             command=lambda: webbrowser.open_new_tab(
                 "https://hub.sp-tarkov.com/files/"
             ),  # type: ignore
@@ -211,9 +225,9 @@ class SettingsTabFrame(ctk.CTkFrame):
         parent (TabsFrame): The parent frame.
     """
 
-    def __init__(self, master: "UI", parent: MasterTabsFrame, **kwargs):
+    def __init__(self, master_window: "UI", parent: MasterTabsFrame, **kwargs):
         super().__init__(parent.settings_tab, **kwargs)
-        # self.master = master
+        self.master_window = master_window
 
         self.grid_columnconfigure(0, weight=1)
 
@@ -224,7 +238,7 @@ class SettingsTabFrame(ctk.CTkFrame):
 
         self.wait_time = tk.StringVar(
             self,
-            value=master.cfg.get(master.cfg.selected_version, "launcher_wait_time"),
+            value=self.master_window.cfg.get(self.master_window.cfg.selected_version, "launcher_wait_time"),
         )
         self.auto_start_entry = ctk.CTkEntry(
             self,
@@ -238,14 +252,14 @@ class SettingsTabFrame(ctk.CTkFrame):
             self,
             text="Save",
             command=lambda: self.save_button_cb(
-                master=master, wait_time=self.wait_time.get()
+                master_window=self.master_window, wait_time=self.wait_time.get()
             ),
         )
         self.save_button.grid(padx=5, pady=5, columnspan=2, row=1)
 
     def save_button_cb(self, **kwargs):
-        master: "UI" = kwargs["master"]
+        master_window: "UI" = kwargs["master_window"]
         if kwargs["wait_time"]:
-            master.cfg.write_to_config(
-                master.cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
+            master_window.cfg.write_to_config(
+                master_window.cfg.selected_version, "launcher_wait_time", kwargs["wait_time"]
             )

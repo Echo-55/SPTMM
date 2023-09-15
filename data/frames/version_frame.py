@@ -16,7 +16,7 @@ if typing.TYPE_CHECKING:
 
 class VersionFrame(ctk.CTkFrame):
     """
-    Version frame within the master frame.
+    Frame that shows selected version and character info.
 
     Args:
         master (UI): The master window.
